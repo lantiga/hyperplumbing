@@ -6,19 +6,19 @@
 
 (defn distributed-compile
   ([g & groups]
-     (abstract-compile
-      g
-      (fn [m] (with-meta (into (lazymap/lazy-hash-map) m) (meta m)))
-      (fn [m k f]
-        (let [;; in the following two lines we need k to be the key path, not just the key
-              ;; TODO: modify abstract-compile in plumbing.graph
-              fnk-meta (meta (get-in g [k]))
-              redis-key (name (or (:redis-key fnk-meta) k))
-              redis-key (if-let [redis-key-prefix (:redis-key-prefix (meta m))]
-                          (str redis-key-prefix ":" redis-key)
-                          redis-key)]
-          (lazymap/delay-assoc
-           m k
-           (if (or (nil? groups) ((set groups) (:group fnk-meta)))
-             (exodelay redis-key (f))
-             (exodelay redis-key))))))))
+     (let [g (plumbing.map/map-leaves-and-path
+              (fn [keypath leaf] (vary-meta leaf assoc ::keypath keypath)) g)]
+      (abstract-compile
+       g
+       (fn [m] (with-meta (into (lazymap/lazy-hash-map) m) (meta m)))
+       (fn [m k f]
+         (let [redis-key (or (:redis-key (meta f))
+                             (clojure.string/join ":" (map name (::keypath (meta f)))))
+               redis-key (if-let [redis-key-prefix (:redis-key-prefix (meta m))]
+                           (str redis-key-prefix ":" redis-key)
+                           redis-key)]
+           (lazymap/delay-assoc
+            m k
+            (if (or (nil? groups) ((set groups) (:group (meta f))))
+              (exodelay redis-key (restricted-call f m))
+              (exodelay redis-key)))))))))
