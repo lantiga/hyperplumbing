@@ -8,7 +8,7 @@
   ([g & groups]
      (let [g (plumbing.map/map-leaves-and-path
               (fn [keypath leaf] (vary-meta leaf assoc ::keypath keypath)) g)]
-      (abstract-compile
+      (simple-hierarchical-compile
        g
        (fn [m] (with-meta (into (lazymap/lazy-hash-map) m) (meta m)))
        (fn [m k f]
